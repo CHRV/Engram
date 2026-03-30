@@ -2,16 +2,13 @@
 
 <br />
 
-```
-███████╗███╗   ██╗ ██████╗ ██████╗  █████╗ ███╗   ███╗
-██╔════╝████╗  ██║██╔════╝ ██╔══██╗██╔══██╗████╗ ████║
-█████╗  ██╔██╗ ██║██║  ███╗██████╔╝███████║██╔████╔██║
-██╔══╝  ██║╚██╗██║██║   ██║██╔══██╗██╔══██║██║╚██╔╝██║
-███████╗██║ ╚████║╚██████╔╝██║  ██║██║  ██║██║ ╚═╝ ██║
-╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
-```
+<img src="./assets/banner.svg" alt="Engram" width="860"/>
+
+<br />
 
 **Persistent, shared agent memory as MCP infrastructure.**
+
+<br />
 
 [![Status](https://img.shields.io/badge/status-early%20development-orange?style=flat-square)](https://github.com/Agentscreator/Engram)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -32,7 +29,7 @@ No memory of why a decision was made last week. No record of which approaches al
 
 <br />
 
-## The Problem
+## 🌿 The Problem
 
 ```
 Day 1 — Agent A discovers: "Don't touch the auth middleware.
@@ -48,7 +45,7 @@ This is not a hypothetical. This is the default state of every multi-agent, mult
 
 <br />
 
-## What Engram Does
+## 🍃 What Engram Does
 
 Engram is an **MCP server** that gives your agents a shared, versioned knowledge base that persists across sessions. When an agent discovers something real — a hidden side effect, a failed approach, an undocumented constraint — it commits that to Engram.
 
@@ -58,7 +55,7 @@ The next agent, in a separate session days later, pulls that fact before touchin
 
 <br />
 
-## API Surface
+## 🌱 API Surface
 
 Engram exposes three tools any MCP-compatible agent can call:
 
@@ -108,22 +105,22 @@ const contradictions = await engram.conflicts();
 
 <br />
 
-## Works With Your Existing Stack
+## 🍀 Works With Your Existing Stack
 
 Engram is MCP-native. No changes to how you work.
 
 | Agent / IDE | Status |
 |---|---|
-| Claude Code | Compatible |
-| Cursor | Compatible |
-| Windsurf | Compatible |
-| Any MCP client | Compatible |
+| Claude Code | 🌿 Compatible |
+| Cursor | 🌿 Compatible |
+| Windsurf | 🌿 Compatible |
+| Any MCP client | 🌿 Compatible |
 
 Connect to the server. Every session starts with accumulated team intelligence instead of nothing.
 
 <br />
 
-## Roadmap
+## 🌿 Roadmap
 
 ```
  ○  MCP server — query, commit, and conflicts tools
@@ -135,7 +132,7 @@ Connect to the server. Every session starts with accumulated team intelligence i
 
 <br />
 
-## Current Status
+## 🍃 Current Status
 
 Engram is in early development. The core design is solid — the architecture, API surface, and storage model are defined. Implementation is underway.
 
@@ -143,7 +140,7 @@ If you're interested in what's being built, **star the repo** to follow along. I
 
 <br />
 
-## Contributing
+## 🌱 Contributing
 
 Engram is being built in the open.
 
@@ -153,17 +150,21 @@ Not sure where to start? Open a discussion and say what you're thinking. That co
 
 <br />
 
-## Feedback
+## 🍀 Feedback
 
 Thoughts on the design, the API surface, or the problem itself?
 
-Open an issue or reach out directly at **joshnathbrown884@gmail.com**. This is early enough that real feedback changes real decisions.
+Open an issue or start a [GitHub Discussion](https://github.com/Agentscreator/Engram/discussions). This is early enough that real feedback changes real decisions.
 
 <br />
 
 ---
 
 <div align="center">
+
+🌿 &nbsp; 🍃 &nbsp; 🌱 &nbsp; 🍀 &nbsp; 🌿
+
+<br />
 
 *A biological engram is the physical trace a memory leaves in the brain.*
 *That's the idea.*
