@@ -84,9 +84,9 @@ async def _serve(
         logger.info("Expired %d TTL facts on startup", expired)
 
     try:
+        if http:
             logger.info("Starting Streamable HTTP on %s:%d", host, port)
             logger.info("Home: http://%s:%d/", host, port)
-            logger.info("Dashboard: http://%s:%d/dashboard", host, port)
             logger.info("Dashboard: http://%s:%d/dashboard", host, port)
             from engram.dashboard import build_dashboard_routes
             from engram.federation import build_federation_routes
