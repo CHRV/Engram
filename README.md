@@ -1,6 +1,6 @@
 <div align="center">
 
-**Multi-agent memory consistency for engineering teams.**
+**Shared memory for your team's agents. Zero setup. You own your data.**
 
 <br />
 
@@ -14,68 +14,163 @@
 
 <br />
 
-Engram is an MCP server that gives your agents a shared, persistent knowledge base — one that survives across sessions, syncs across engineers, and detects when two agents develop contradictory beliefs about the same codebase.
+Engram gives your team's agents a shared, persistent memory that survives across sessions and detects when two agents develop contradictory beliefs about the same codebase.
+
+You bring your own database. Engram never owns your data.
 
 > Individual agent memory is solved. Engram solves what happens when multiple agents need to agree on what's true.
 
 <br />
 
-## The Problem
+## How it works
 
-Every agent session starts from zero. Your agent re-discovers why that architectural decision was made, re-learns which approaches already failed, re-figures out which constraints are non-negotiable. Another engineer's agent did the same thing last week.
+Every agent on your team connects to the same knowledge base. When one agent discovers something — a hidden side effect, a failed approach, an undocumented constraint — it commits that fact. Every other agent on the team can query it instantly.
 
-Existing memory tools fix this for a single engineer and a single agent. They don't address what happens when Agent A and Agent B — running in separate sessions, for different engineers — develop incompatible beliefs about the same system.
-
-That's a consistency problem. Engram solves it.
+When two agents develop incompatible beliefs about the same system, Engram detects the contradiction and surfaces it for review. No silent divergence.
 
 <br />
 
-## How It Works
-
-Engram exposes four MCP tools. That's the entire surface area.
-
-| Tool | Purpose |
-|---|---|
-| `engram_query` | Pull what your team's agents collectively know about a topic. Structured facts, ranked by relevance and recency. |
-| `engram_commit` | Persist a verified discovery — a hidden side effect, a failed approach, an undocumented constraint. Append-only, timestamped, traceable. |
-| `engram_conflicts` | Surface pairs of facts that semantically contradict each other. Not an error — a structured artifact. Reviewable, resolvable, auditable. |
-| `engram_resolve` | Settle a disagreement. Pick a winner, merge both sides, or dismiss a false positive. |
-
-Conflict detection runs asynchronously in the background using a tiered pipeline: deterministic entity matching, NLI cross-encoder scoring, and optional LLM escalation for ambiguous cases. Commits return instantly; detection completes within seconds.
-
-<br />
-
-## Quick Start
-
-### Requirements
-
-- Python 3.11+
-- Any MCP-compatible client — Claude Code, Cursor, Windsurf, Kiro, VS Code
-
-### Install and run
+## Install
 
 ```bash
 pip install engram-mcp
-engram serve
+engram install
 ```
 
-Engram runs at `localhost:7474` and stores facts in `~/.engram/knowledge.db`. No Docker, no database setup, no API keys.
+`engram install` auto-detects your MCP client (Claude Code, Cursor, Windsurf) and adds the config. Restart your editor and open a new chat — your agent handles everything else.
 
-### Connect
+<br />
 
-Add to your MCP client config:
+## What happens after install
 
-```json
-{
-  "mcpServers": {
-    "engram": {
-      "url": "http://localhost:7474/mcp"
-    }
-  }
-}
+Your agent calls `engram_status()` on its first tool use and walks you through setup. No docs to read. No JSON to edit.
+
+**Setting up a new workspace (team founder):**
+
+```
+Agent: "Do you have a Team ID to join an existing workspace,
+        or are you setting up a new one?"
+
+You:   "New"
+
+Agent: "Add your database connection string to your environment:
+
+          export ENGRAM_DB_URL='postgres://...'
+
+        You can get a free PostgreSQL database at neon.tech,
+        supabase.com, or railway.app. Tell me when it's set."
+
+[You set ENGRAM_DB_URL]
+
+Agent: "Your team workspace is ready.
+
+        Share with teammates:
+          Team ID:    ENG-X7K2-P9M4
+          Invite Key: ek_live_abc123...
+
+        That's all they need.
+        Should commits show who made them, or stay anonymous?"
 ```
 
-Or use stdio for local-only mode:
+**Joining a workspace (teammate):**
+
+```
+Agent: "Do you have a Team ID or are you setting up a new one?"
+
+You:   "Join"
+
+Agent: "What's your Team ID?"
+You:   "ENG-X7K2-P9M4"
+
+Agent: "What's your Invite Key?"
+You:   "ek_live_abc123..."
+
+Agent: "You're in. I'll query team memory before starting any task."
+```
+
+Teammates only need two strings — the Team ID and Invite Key. The database connection is encrypted inside the invite key and extracted automatically. No one except the workspace founder ever sees or handles a database URL.
+
+**Every session after that:** the agent connects silently, queries before every task, commits after every discovery. Engram is invisible infrastructure.
+
+<br />
+
+## You own your data
+
+Engram connects to a PostgreSQL database you provide. Your facts, conflicts, and agent history live in your database — not ours.
+
+- Use [Neon](https://neon.tech), [Supabase](https://supabase.com), [Railway](https://railway.app), or any PostgreSQL instance
+- Self-host if you want zero third-party involvement
+- The database URL is never stored by Engram — only in `~/.engram/workspace.json` on your machine (mode 600)
+- The invite key carries the database URL encrypted inside it — teammates never see it in plaintext
+
+**Privacy settings** (asked once during setup, enforced server-side):
+- **Anonymous mode** — strip engineer names from all commits
+- **Anonymous agents** — randomize agent IDs each session
+
+<br />
+
+## Tools
+
+Engram exposes seven MCP tools. The first three handle setup; the last four are the knowledge layer.
+
+| Tool | Purpose |
+|---|---|
+| `engram_status` | Check setup state. Returns `next_prompt` — the agent says it to you. |
+| `engram_init` | Create a new workspace (founder). Generates Team ID + Invite Key. |
+| `engram_join` | Join a workspace with Team ID + Invite Key. Extracts db URL automatically. |
+| `engram_query` | Pull what your team's agents collectively know about a topic. |
+| `engram_commit` | Persist a verified discovery — fact, constraint, decision, failed approach. |
+| `engram_conflicts` | Surface pairs of facts that semantically contradict each other. |
+| `engram_resolve` | Settle a disagreement: pick a winner, merge both sides, or dismiss. |
+
+<br />
+
+## Conflict detection
+
+Contradiction detection runs asynchronously in the background using a tiered pipeline:
+
+| Tier | Method | Catches |
+|---|---|---|
+| 0 | Deterministic entity matching | "rate limit is 1000" vs "rate limit is 2000" |
+| 1 | NLI cross-encoder (local, CPU) | Semantic contradictions in natural language |
+| 2 | Numeric + temporal rules | Different values for the same named entity |
+| 2b | Cross-scope entity detection | Contradictions spanning different scopes |
+| 3 | LLM escalation (rare, optional) | Ambiguous cases needing domain understanding |
+
+Commits return instantly. Detection completes in the background. The write lock is held for ~1ms.
+
+<br />
+
+## Architecture
+
+```
+┌──────────────────────────────────────────┐
+│            I/O Layer (MCP)               │  ← agents connect here (stdio)
+│  engram_status / engram_init /           │
+│  engram_join / engram_commit /           │
+│  engram_query / engram_conflicts /       │
+│  engram_resolve                          │
+├──────────────────────────────────────────┤
+│          Detection Layer                 │  ← runs asynchronously
+│  Tier 0: entity exact-match             │
+│  Tier 1: NLI cross-encoder (local)      │
+│  Tier 2: numeric / temporal rules       │
+│  Tier 2b: cross-scope entity detection  │
+│  Tier 3: LLM escalation (rare)          │
+├──────────────────────────────────────────┤
+│          Storage Layer                   │
+│  Local:  SQLite  (~/.engram/)            │
+│  Team:   PostgreSQL (your ENGRAM_DB_URL) │
+└──────────────────────────────────────────┘
+```
+
+Team sharing works through the shared database — no HTTP server, no port forwarding, no firewall rules. Every team member runs their own local Engram process connected to the same PostgreSQL instance.
+
+<br />
+
+## Solo use (no team)
+
+No database needed. Engram defaults to local SQLite:
 
 ```json
 {
@@ -88,67 +183,18 @@ Or use stdio for local-only mode:
 }
 ```
 
-<br />
-
-## Team Setup
-
-Engram is local-first by default. To share knowledge across your team, point everyone at the same server:
-
-```bash
-engram serve --host 0.0.0.0 --port 7474
-```
-
-Or deploy with Docker:
-
-```bash
-docker run -p 7474:7474 -v engram-data:/data engram/server
-```
-
-Every commit is immediately available to every agent on the team.
+Facts persist in `~/.engram/knowledge.db`. Add `ENGRAM_DB_URL` later to upgrade to team mode — the agent handles migration automatically.
 
 <br />
 
-## Architecture
-
-```
-┌──────────────────────────────────────────┐
-│            I/O Layer (MCP)               │  ← agents connect here
-│  engram_commit / engram_query /          │
-│  engram_conflicts / engram_resolve       │
-├──────────────────────────────────────────┤
-│          Detection Layer                 │  ← runs asynchronously
-│  Tier 0: hash dedup + entity match       │
-│  Tier 1: NLI cross-encoder (local)       │
-│  Tier 2: numeric / temporal rules        │
-│  Tier 3: LLM escalation (rare)           │
-├──────────────────────────────────────────┤
-│          Storage Layer (SQLite)          │  ← append-only, bitemporal
-│  facts · conflicts · agents · scopes     │
-└──────────────────────────────────────────┘
-```
-
-Every fact carries a temporal validity window (`valid_from`, `valid_until`). Supersession, correction, archival, and versioning are all expressed through this single primitive — no pointer chasing, no separate archive tables, no decay scores.
-
-Detection is fully decoupled from the write path. The write lock is held for ~1ms (a single `INSERT`). NLI inference runs in a background worker. This keeps SQLite viable under concurrent agent load.
-
-<br />
-
-## What Engram Is Not
-
-There are 400+ MCP servers that give an individual agent persistent memory across sessions. Engram is not that.
-
-Engram is a **consistency layer**. Other systems store and retrieve. Engram asks: *are these facts coherent with each other?* It is designed to be composable with existing memory tools, not to replace them.
-
-<br />
-
-## Research Foundation
+## Research foundation
 
 Engram is grounded in peer-reviewed research on multi-agent memory systems:
 
-- [Yu et al. (2026)](https://arxiv.org/abs/2603.10062) — frames multi-agent memory as a computer architecture problem and names consistency as the most pressing open challenge
-- [Xu et al. (2025)](https://arxiv.org/abs/2502.12110) — A-Mem's Zettelkasten-inspired note structure informs fact enrichment
+- [Yu et al. (2026)](https://arxiv.org/abs/2603.10062) — frames multi-agent memory as a computer architecture problem; names consistency as the most pressing open challenge
+- [Xu et al. (2025)](https://arxiv.org/abs/2502.12110) — A-Mem's Zettelkasten note structure informs fact enrichment
 - [Rasmussen et al. (2025)](https://arxiv.org/abs/2501.13956) — Graphiti's bitemporal modeling directly inspired the temporal validity design
-- [Hu et al. (2026)](https://arxiv.org/abs/2512.13564) — comprehensive survey confirming shared multi-agent memory as an open frontier
+- [Hu et al. (2026)](https://arxiv.org/abs/2512.13564) — survey confirming shared multi-agent memory as an open frontier
 
 Full literature review: [`LITERATURE.md`](./LITERATURE.md) · Implementation plan: [`IMPLEMENTATION.md`](./IMPLEMENTATION.md)
 
