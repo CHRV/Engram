@@ -289,9 +289,12 @@ def _render_landing() -> str:
       <div class="install-section">
         <h2 class="section-title">Install</h2>
         <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('install-cmd')">Copy</button>
-          <div id="install-cmd">pip install engram-team
-engram install</div>
+          <button class="copy-btn" onclick="copyCode('install-cmd-1')">Copy</button>
+          <div id="install-cmd-1">pip install engram-team</div>
+        </div>
+        <div class="code-block" style="margin-top: 0.75rem;">
+          <button class="copy-btn" onclick="copyCode('install-cmd-2')">Copy</button>
+          <div id="install-cmd-2">engram install</div>
         </div>
         <p class="note">
           <code>engram install</code> auto-detects your MCP client (Claude Code, Cursor, Windsurf) and adds the config. 
@@ -459,8 +462,12 @@ def _render_dashboard_placeholder() -> str:
     <h1>Dashboard needs a running server</h1>
     <p>Start your local Engram instance, then open the dashboard there.</p>
     <div class="code-box">
-      pip install engram-team<br>
-      engram install<br>
+      pip install engram-team
+    </div>
+    <div class="code-box" style="margin-top: 8px;">
+      engram install
+    </div>
+    <div class="code-box" style="margin-top: 8px;">
       engram serve --http
     </div>
     <p>Then visit <a href="http://localhost:7474/dashboard">localhost:7474/dashboard</a></p>
