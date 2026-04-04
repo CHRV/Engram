@@ -1,7 +1,7 @@
 """PostgreSQL storage backend for team mode (ENGRAM_DB_URL set).
 
 Uses asyncpg. Implements the same BaseStorage interface as SQLiteStorage.
-Install the team extra to get asyncpg: pip install engram-mcp[team]
+Install the team extra to get asyncpg: pip install engram-team[team]
 
 Key differences from SQLiteStorage:
 - $1/$2/... placeholders instead of ?
@@ -39,7 +39,7 @@ class PostgresStorage(BaseStorage):
         except ImportError:
             raise RuntimeError(
                 "asyncpg is required for team mode. "
-                "Install it with: pip install engram-mcp[team]"
+                "Install it with: pip install engram-team[team]"
             )
         self._pool = await asyncpg.create_pool(self.db_url, min_size=2, max_size=10)
         async with self._pool.acquire() as conn:

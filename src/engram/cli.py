@@ -48,7 +48,7 @@ _MCP_CLIENTS = {
 
 _ENGRAM_MCP_ENTRY = {
     "command": "uvx",
-    "args": ["engram-mcp@latest"],
+    "args": ["engram-team@latest"],
 }
 
 
@@ -102,7 +102,7 @@ def install(dry_run: bool) -> None:
     elif not added and not skipped:
         click.echo(
             "\nNo MCP clients detected. Add Engram manually:\n\n"
-            '  {"mcpServers": {"engram": {"command": "uvx", "args": ["engram-mcp@latest"]}}}'
+            '  {"mcpServers": {"engram": {"command": "uvx", "args": ["engram-team@latest"]}}}'
         )
 
 
@@ -124,12 +124,12 @@ def _try_claude_code_cli(dry_run: bool, added: list, skipped: list) -> None:
             pass
 
     if dry_run:
-        click.echo("[dry-run] Would run: claude mcp add engram --command uvx -- engram-mcp@latest")
+        click.echo("[dry-run] Would run: claude mcp add engram --command uvx -- engram-team@latest")
         return
 
     try:
         result = subprocess.run(
-            ["claude", "mcp", "add", "engram", "--command", "uvx", "--", "engram-mcp@latest"],
+            ["claude", "mcp", "add", "engram", "--command", "uvx", "--", "engram-team@latest"],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0:
