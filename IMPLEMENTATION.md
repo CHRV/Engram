@@ -100,9 +100,11 @@ with each other?*
 
 ```
 ┌──────────────────────────────────────────┐
-│            I/O Layer (MCP)               │  ← agents connect here
-│  engram_commit / engram_query /          │
-│  engram_conflicts / engram_resolve       │
+│            I/O Layer (MCP)               │  ← agents connect here (stdio)
+│  engram_status / engram_init /           │
+│  engram_join / engram_commit /           │
+│  engram_query / engram_conflicts /       │
+│  engram_resolve                          │
 ├──────────────────────────────────────────┤
 │        Commit Pipeline                   │  ← inline, <10ms
 │  Secret scan → dedup → entity extract →  │
@@ -115,11 +117,19 @@ with each other?*
 │  Tier 2b: cross-scope entity detection   │
 │  Tier 3: LLM escalation (rare)           │
 ├──────────────────────────────────────────┤
-│          Storage Layer (SQLite)          │  ← durable append-only log
-│  facts (temporal), conflicts, agents,    │
+│          Storage Layer                   │  ← durable append-only log
+│  Local mode: SQLite (~/.engram/)         │
+│  Team mode:  PostgreSQL (ENGRAM_DB_URL)  │
+│  facts, conflicts, agents, workspaces,   │
 │  scope_permissions, detection_feedback   │
-│  facts_fts (FTS5 virtual table)          │
+│  Full-text: FTS5 (local) / tsvector (pg) │
+│  Vectors:   numpy BLOB / pgvector        │
 └──────────────────────────────────────────┘
+
+Workspace config: ~/.engram/workspace.json
+  {engram_id, db_url, anonymous_mode, anon_agents}
+  Written once by engram_init or engram_join.
+  All subsequent sessions connect silently.
 ```
 
 Conflict detection runs **outside the write path**. Every `engram_commit` returns
@@ -398,7 +408,7 @@ text."*
 Kiro) and Streamable HTTP (for team/remote deployment). Streamable HTTP replaced SSE
 in the MCP 2025-03-26 spec and is the recommended transport for remote servers.
 
-**Zero-setup local deployment:**
+**Local deployment (solo developer):**
 ```json
 {
   "mcpServers": {
@@ -410,29 +420,31 @@ in the MCP 2025-03-26 spec and is the recommended transport for remote servers.
 }
 ```
 
-One line of config. No Docker, no separate server process, no database setup. The
-server creates `~/.engram/knowledge.db` on first run. This follows Context7's lesson:
-*"Every additional setup step is a point where potential users drop off."*
+No database setup. No Docker. The server creates `~/.engram/knowledge.db` on first run.
+This follows Context7's lesson: *"Every additional setup step is a point where potential
+users drop off."*
 
-**Team deployment:**
+**Team deployment (shared database):**
 ```json
 {
   "mcpServers": {
     "engram": {
-      "url": "http://engram.internal:7474/mcp"
+      "command": "uvx",
+      "args": ["engram-mcp@latest"],
+      "env": { "ENGRAM_DB_URL": "postgres://..." }
     }
   }
 }
 ```
 
-Or Docker:
-```
-docker run -p 7474:7474 -v engram-data:/data engram/server
-```
+Same MCP config structure. No HTTP server. No Docker. No firewall rules. The agent runs
+`engram_status()` on first use and walks the user through `engram_init` or `engram_join`.
+The database connection string is the only thing that needs to be distributed — and
+the agent tells the user exactly where to put it.
 
-**Auth for remote deployment:** OAuth 2.1 per the MCP 2025-06-18 spec. Bearer tokens
-as the MVP, with the server acting as an OAuth 2.0 Resource Server. Tokens are bound
-to the server instance (audience claim) to prevent token confusion attacks.
+Every team member brings their own database URL pointing at the same PostgreSQL instance.
+The invite key proves workspace membership; the connection string provides database access.
+These are two separate concerns: *what workspace* vs *how to reach the data*.
 
 ### Privacy by Design
 
@@ -450,6 +462,175 @@ a lightweight regex scanner on `content` at commit time to detect common secret 
 (API keys, JWT tokens, connection strings, AWS credentials). If detected, the commit is
 rejected with an actionable error message identifying the pattern. This is a ~1ms check
 that prevents the most common accidental secret leakage.
+
+---
+
+## Phase 0 — Agent-Native Onboarding
+
+**Goal:** Every interaction with Engram goes through the agent. No CLI wizards, no docs
+to read, no JSON to edit. The agent asks the questions and handles the setup.
+
+### The Core Principle
+
+Engram never owns your data. You bring a PostgreSQL database connection string. Engram
+provides the schema, the conflict detection logic, and the MCP tools. The database lives
+wherever you want it — any PostgreSQL-compatible provider, or self-hosted.
+
+Local mode (no `ENGRAM_DB_URL`) continues to work with SQLite for solo developers who
+don't need team sharing.
+
+### Workspace Config
+
+On first run, Engram looks for `~/.engram/workspace.json`:
+
+```json
+{
+  "engram_id": "ENG-X7K2-P9M4",
+  "db_url": "postgres://...",
+  "anonymous_mode": false,
+  "anon_agents": false
+}
+```
+
+If this file does not exist and `ENGRAM_DB_URL` is not set, Engram is in **local mode**
+(SQLite). If `ENGRAM_DB_URL` is set but no workspace.json exists, `engram_status` guides
+the agent through `engram_init`. If workspace.json exists, the agent connects silently.
+
+### Three New MCP Tools
+
+**`engram_status()`** — the entry point. Called by the agent on first use (or any time
+the agent needs to know the current state). Returns the current setup state and the exact
+string the agent should say to the user next.
+
+```python
+# Example responses:
+{
+  "status": "unconfigured",
+  "next_prompt": "Do you have a Team ID to join an existing workspace, or are you setting up a new one?"
+}
+
+{
+  "status": "awaiting_db",
+  "next_prompt": "Add your database connection string to your environment before we continue:\n\n  export ENGRAM_DB_URL='postgres://...'\n\nYou can get a free PostgreSQL database at neon.tech, supabase.com, railway.app, or use any self-hosted instance. Tell me when it's set."
+}
+
+{
+  "status": "ready",
+  "engram_id": "ENG-X7K2-P9M4",
+  "workspace": "~/.engram/workspace.json"
+}
+```
+
+**`engram_init()`** — called by the agent when the user is setting up a new workspace.
+Requires `ENGRAM_DB_URL` to be set. Runs schema setup, generates a Team ID and invite
+key, writes workspace.json, and asks the user their privacy preferences.
+
+The invite key is a signed, encrypted token with the database URL embedded inside it.
+Teammates never see or handle the raw connection string — it is extracted and written
+to their workspace.json automatically when they call `engram_join`.
+
+```python
+# Invite key payload (encrypted + HMAC-signed, never shown in plaintext):
+{
+  "engram_id": "ENG-X7K2-P9M4",
+  "db_url": "postgres://...",   # extracted silently by engram_join
+  "expires_at": "2026-07-01",
+  "uses_remaining": 10          # None = unlimited
+}
+
+# Response to agent:
+{
+  "status": "initialized",
+  "engram_id": "ENG-X7K2-P9M4",
+  "invite_key": "ek_live_abc123...",
+  "next_prompt": "Your team workspace is ready.\n\nShare with teammates:\n  Team ID:    ENG-X7K2-P9M4\n  Invite Key: ek_live_abc123\n\nThat's all they need. Should commits show who made them, or stay anonymous?"
+}
+```
+
+**`engram_join(team_id, invite_key)`** — called by the agent when a teammate is joining
+an existing workspace. Decrypts the invite key, extracts the database URL, validates
+workspace membership, and writes workspace.json. The teammate never provides or sees
+the database connection string — it is fully contained within the invite key.
+
+```python
+# Response:
+{
+  "status": "joined",
+  "engram_id": "ENG-X7K2-P9M4",
+  "next_prompt": "You're in. I'll query team memory before starting work on anything."
+}
+```
+
+### The Agent-Driven Conversation
+
+The MCP server `instructions` field tells the agent its behavioral contract:
+
+```
+On first use, call engram_status(). Read the 'next_prompt' field in every response
+and say it to the user. This is how Engram guides setup — follow each prompt in
+sequence. Once status is 'ready', query before every task and commit discoveries after.
+```
+
+The agent IS the UX. No dashboard, no setup wizard, no documentation required.
+
+### Privacy: Two Decisions, Made Once
+
+Both are asked by the agent during `engram_init`, stored in the workspace, and never
+asked again. Both are **enforced server-side** — stripping happens on INSERT, not on
+the client.
+
+**Attribution (anonymous_mode):**
+> "Should commits show who made them? Yes = your identifier appears on discoveries.
+> No = all commits are anonymous. The server enforces this — your name is stripped
+> before storage even if the agent sends it."
+
+**Agent identity (anon_agents):**
+> "Should agent identifiers be stored? Yes = tracks which agent made each commit
+> (useful for debugging conflicts). No = agent IDs are randomized each session."
+
+These become `anonymous_mode` and `anon_agents` booleans in the `workspaces` table.
+
+### Complete Flow
+
+```
+Install:  pip install engram-mcp
+Config:   Add to MCP client (stdio, uvx engram-mcp@latest)
+
+┌─ First session (founder — one time only) ──────────────────────┐
+│  Agent calls engram_status()                                    │
+│  → "Do you have a Team ID or are you setting up a new one?"    │
+│  User: "New"                                                    │
+│  → "Add ENGRAM_DB_URL to your environment. Tell me when set."  │
+│  [Only person who ever touches a database string]              │
+│  User sets env var, restarts agent                             │
+│  Agent calls engram_init()                                      │
+│  → db_url encrypted into invite key — never surfaces again     │
+│  → "Anonymous commits or named?"                               │
+│  User answers. workspace.json written.                          │
+│  → "Share with teammates via iMessage, WhatsApp, etc:           │
+│     Team ID:    ENG-X7K2-P9M4                                  │
+│     Invite Key: ek_live_abc123"                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─ First session (teammate — just two strings) ──────────────────┐
+│  Agent calls engram_status()                                    │
+│  → "Do you have a Team ID or are you setting up a new one?"    │
+│  User: "Join"                                                   │
+│  → "What's your Team ID?"                                       │
+│  → "What's your Invite Key?"                                    │
+│  Agent calls engram_join(team_id, invite_key)                   │
+│  → db_url decrypted silently, workspace.json written            │
+│  → "You're in."                                                 │
+│  [No database string. No env vars. No configuration.]          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─ Every session thereafter ─────────────────────────────────────┐
+│  workspace.json exists → agent connects silently                │
+│  engram_query before every task                                 │
+│  engram_commit after every discovery                            │
+│  No prompts. No setup. Invisible.                               │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -593,6 +774,31 @@ False-positive feedback from `engram_resolve(resolution_type="dismissed")` feeds
 local calibration file that adjusts the NLI threshold over time. This addresses the
 calibration failure mode identified in Round 3.
 
+### Workspace Table (Phase 0)
+
+```sql
+CREATE TABLE workspaces (
+    engram_id        TEXT PRIMARY KEY,   -- e.g. "ENG-X7K2-P9M4"
+    created_at       TEXT NOT NULL,
+    anonymous_mode   INTEGER NOT NULL DEFAULT 0,  -- 1 = strip engineer on INSERT
+    anon_agents      INTEGER NOT NULL DEFAULT 0   -- 1 = randomize agent_id per session
+);
+
+CREATE TABLE invite_keys (
+    key_hash         TEXT PRIMARY KEY,   -- SHA-256 of the raw invite key
+    engram_id        TEXT NOT NULL REFERENCES workspaces(engram_id),
+    created_at       TEXT NOT NULL,
+    expires_at       TEXT,               -- NULL = no expiry
+    uses_remaining   INTEGER             -- NULL = unlimited
+    -- db_url is NOT stored here — it is encrypted into the invite key token itself
+    -- so the database never contains plaintext credentials in the invite_keys table
+);
+```
+
+All other tables gain a `workspace_id TEXT NOT NULL` column (populated at init time,
+defaults to `'local'` in SQLite mode). This is the namespace: one database can host
+multiple teams.
+
 ### Scope Permissions
 
 ```sql
@@ -626,24 +832,57 @@ This reuses the existing temporal model — no new abstraction needed.
 
 | Dependency | Purpose | Why this and not X |
 |---|---|---|
-| `mcp` SDK (includes FastMCP) | MCP server | Standard; supports Streamable HTTP transport |
-| `aiosqlite` | Async SQLite I/O | WAL mode + async = correct |
+| `mcp` SDK (includes FastMCP) | MCP server | Standard; supports stdio and Streamable HTTP |
+| `aiosqlite` | Local mode (solo dev) | WAL mode + async = correct for single-machine use |
+| `asyncpg` | Team mode (ENGRAM_DB_URL set) | Fast PostgreSQL async driver; replaces aiosqlite when DB URL present |
 | `sentence-transformers` | Embeddings + NLI | Local, no API key |
-| `numpy` | Cosine similarity | No extra dep |
+| `numpy` | Cosine similarity (local mode) | No extra dep |
+| `pgvector` | Vector similarity (team mode) | Native PostgreSQL vector index; replaces numpy cosine at scale |
 | `datasketch` | MinHash for entity dedup | Replaces LLM-only entity resolution |
 | small NER model (e.g. `dslim/bert-base-NER`) | Entity extraction fallback | Catches what regex misses; ~50ms, local |
+
+**Dual storage backend:** `Storage` is an abstract interface. `SQLiteStorage` handles
+local mode; `PostgresStorage` handles team mode. The engine, server, and MCP tools call
+the interface — they have no knowledge of which backend is active. Backend selection
+happens at startup by checking for `ENGRAM_DB_URL` (or reading workspace.json).
+
+**PostgreSQL migration notes:**
+- `?` placeholders → `$1, $2, ...` (asyncpg syntax)
+- `json_each()` / `json_extract()` → `jsonb @>` operators and `->>`
+- FTS5 virtual table → `tsvector` column + `GIN` index + `to_tsquery()`
+- `BLOB` embeddings → `vector` type (pgvector extension)
+- `PRAGMA journal_mode=WAL` → not needed (PostgreSQL MVCC handles this natively)
 
 **Round 6 change: `rank_bm25` removed.** SQLite FTS5 provides BM25 ranking natively
 in C, requires zero additional dependencies, and integrates with the existing storage
 layer. The `facts_fts` virtual table replaces the Python-level BM25 library entirely.
-This removes a dependency seam and improves lexical retrieval performance.
+In PostgreSQL team mode, `tsvector` + `ts_rank` provides equivalent functionality.
 
-**Transport:** Streamable HTTP (MCP spec v2025-03-26+) is the default for remote
-deployment. Local/CLI use is `stdio`. The legacy `HTTP+SSE` transport (2024-11-05 spec)
-is deprecated by the MCP spec; Engram will not implement it. Streamable HTTP uses a
-single `/mcp` endpoint supporting POST and GET, is stateless, and deploys behind any
-standard reverse proxy (nginx, Cloudflare) — identical to how Google's managed remote
-MCP endpoints and Microsoft's Azure-hosted MCP services work in production.
+**Transport:** `stdio` is the transport for both local and team mode. Team sharing is
+achieved through the shared PostgreSQL database — not through an HTTP server that all
+engineers must reach. This eliminates the need for port forwarding, firewall rules, or
+"always-on" infrastructure. The MCP config is identical for solo and team use:
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "uvx",
+      "args": ["engram-mcp@latest"],
+      "env": {
+        "ENGRAM_DB_URL": "postgres://..."
+      }
+    }
+  }
+}
+```
+
+Or with the env var set at the shell level, the config stays exactly as it is for local
+mode — the server detects the env var at startup and switches backends automatically.
+
+Streamable HTTP remains available for dashboard access and federation endpoints, but
+is no longer required for team collaboration. The legacy `HTTP+SSE` transport
+(2024-11-05 spec) is deprecated by the MCP spec; Engram will not implement it.
 
 FastMCP is now integrated into the official `mcp` Python SDK. Engram uses the `@mcp.tool`
 decorator pattern for tool registration, following the same pattern as Context7 and other
@@ -1053,9 +1292,8 @@ security guide says it plainly: *"stdio for prototyping, HTTP for production."* 
 managed MCP servers use IAM-based auth with no shared keys. The MCP 2025-06-18 spec
 classifies servers as OAuth 2.0 Resource Servers. Engram follows this progression:
 
-**Tier 1 — Local mode (default):** No auth. Stdio transport. The server runs on
-localhost, creates `~/.engram/knowledge.db` on first run. Zero setup. This is how
-Context7, GitHub MCP, Playwright MCP, and every popular local MCP server works.
+**Tier 1 — Local mode (default):** No auth. Stdio transport. No `ENGRAM_DB_URL` set.
+The server creates `~/.engram/knowledge.db` on first run. Zero setup. Single developer.
 
 ```json
 {
@@ -1068,30 +1306,33 @@ Context7, GitHub MCP, Playwright MCP, and every popular local MCP server works.
 }
 ```
 
-**Tier 2 — Team mode (`--auth`):** Streamable HTTP transport. Bearer token auth. Tokens
-are JWTs bound to the server instance (audience claim) to prevent token confusion attacks
-per the MCP spec. HTTPS required. This is the minimum for any non-localhost deployment.
+**Tier 2 — Team mode (BYOD database):** Stdio transport. `ENGRAM_DB_URL` set in env.
+The connection string IS the credential — database-level auth is provided by the
+PostgreSQL provider. No HTTP server required. No port forwarding. No firewall rules.
+All engineers run their own local Engram process; all connect to the same database.
 
-```
-engram serve --host 0.0.0.0 --port 7474 --auth
-engram token create --engineer [email]
-```
+Workspace membership is controlled by invite keys (generated by `engram_init`, validated
+by `engram_join`). The invite key is a signed, encrypted token that contains the database
+URL — teammates only ever need the Team ID and Invite Key. The connection string is
+never shared in plaintext; it is decrypted from the invite key and written silently to
+workspace.json. After joining, workspace.json is the credential store.
 
 ```json
 {
   "mcpServers": {
     "engram": {
-      "url": "https://engram.internal:7474/mcp"
+      "command": "uvx",
+      "args": ["engram-mcp@latest"],
+      "env": { "ENGRAM_DB_URL": "postgres://user:pass@host/db" }
     }
   }
 }
 ```
 
-**Tier 3 — Enterprise mode (future):** Full OAuth 2.1 with PKCE. Protected Resource
-Metadata (RFC 9728) for authorization server discovery. Resource parameter (RFC 8707)
-for token binding. Integration with enterprise identity providers (Microsoft Entra ID,
-Google IAM, Okta). This follows the pattern Microsoft's Azure MCP Server uses: remote
-HTTP servers behind an API gateway with centralized policy enforcement and monitoring.
+**Tier 3 — Enterprise mode (future):** Secrets manager integration (AWS Secrets Manager,
+HashiCorp Vault, 1Password) so `ENGRAM_DB_URL` never appears in plaintext config. Full
+audit logging of every workspace join/leave event. SSO-bound workspace membership:
+workspace access is tied to an Okta/Entra group rather than a static invite key.
 
 ### Memory Injection Defense (Round 6)
 
@@ -1243,18 +1484,21 @@ an estimated 80–85%, but the remaining 15–20% requires human judgment.
 
 | Phase | Deliverable | Unlocks |
 |---|---|---|
-| 1 | Schema + migrations + FTS5 | All subsequent phases |
-| 2 | MCP server: commit (with secret scan, provenance, TTL) + query | Usable by agents today |
+| 0 | Agent-native onboarding: engram_status / engram_init / engram_join, workspace.json, privacy settings | Team sharing without any manual setup |
+| 1 | Dual-backend schema: SQLite (local) + PostgreSQL (team), workspaces + invite_keys tables, pgvector + tsvector | All subsequent phases on both backends |
+| 2 | MCP server: commit (secret scan, provenance, TTL) + query | Usable by agents today |
 | 3 | Conflict detection (background, tiered, CPU-optimized) | **Core differentiator** |
 | 4 | Resolution workflow | Conflicts become actionable |
-| 5 | Auth + access control + MINJA defense | Team deployment |
-| 6 | Federation (replicated journal, Turso optional) | Multi-team / org-wide |
+| 5 | Access control + MINJA defense (scope permissions, rate limiting, agent reliability) | Production hardening |
+| 6 | Federation (replicated journal) | Multi-team / org-wide |
 | 7 | Dashboard (with expiry view) | Human oversight |
 
-Phases 1–3 are the minimum viable Engram. **Phase 3 is the reason Engram exists** —
-without it, Engram is just another shared memory MCP server in a field that includes
-Mem0 (38k stars), Cipher, SAMEP, and Agent KB. The background worker in Phase 3 is the
-structural prerequisite for Phase 2 being usable under any real load.
+Phases 0–3 are the minimum viable Engram. **Phase 0 is what makes it distributable** —
+without agent-native onboarding, team setup requires humans reading docs and running
+CLI commands. **Phase 3 is the reason Engram exists** — without conflict detection,
+Engram is just another shared memory MCP server in a field that includes Mem0 (38k
+stars), Cipher, SAMEP, and Agent KB. The background worker in Phase 3 is the structural
+prerequisite for Phase 2 being usable under any real load.
 
 ---
 
