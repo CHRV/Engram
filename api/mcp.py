@@ -364,11 +364,14 @@ async def _tool_init(pool: Any, anonymous_mode: bool = False, anon_agents: bool 
             f"To save your invite key, update your MCP config to include:\n"
             f'  "headers": {{"Authorization": "Bearer {invite_key}"}}\n\n'
             f"In Claude Code I can edit the config for you — just ask.\n\n"
-            f"To invite teammates, share the key above. They run:\n"
+            f"To invite teammates, share the invite key above. They run:\n"
             f"  curl -fsSL https://engram.app/install | sh\n"
             f"and paste the invite key when prompted.\n\n"
-            f"They can also view your team's memory graph at:\n"
-            f"  https://engram.app  →  search with workspace ID + invite key"
+            f"You can view and manage your team's memory at:\n"
+            f"  https://www.engram-us.com\n"
+            f"Search with your Workspace ID ({engram_id}) and invite key to see your memory graph, "
+            f"facts, conflicts, and lineage chains.\n\n"
+            f"Should commits show who made them, or stay anonymous?"
         ),
     }
 
@@ -402,10 +405,15 @@ async def _tool_join(invite_key: str, pool: Any) -> dict:
         "invite_key": invite_key,
         "next_prompt": (
             f"Connected to workspace {engram_id}!\n\n"
+            f"Your Workspace ID: {engram_id}\n\n"
             f"Update your MCP config Authorization header:\n"
             f"  Bearer {invite_key}\n\n"
             f"In Claude Code I can edit the config file for you — just ask.\n"
-            f"Otherwise restart your IDE and Engram will be ready."
+            f"Otherwise restart your IDE and Engram will be ready.\n\n"
+            f"You can view and manage your team's memory at:\n"
+            f"  https://www.engram-us.com\n"
+            f"Search with your Workspace ID ({engram_id}) and invite key to see your memory graph, "
+            f"facts, conflicts, and lineage chains."
         ),
     }
 
