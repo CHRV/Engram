@@ -42,13 +42,13 @@ If your IDE isn't listed above but supports MCP, add Engram as a remote HTTP ser
 
 **URL:**
 ```
-https://mcp.engram-us.com/mcp
+https://www.engram-us.com/mcp
 ```
 
 **With an invite key:**
 ```json
 {
-  "url": "https://mcp.engram-us.com/mcp",
+  "url": "https://www.engram-us.com/mcp",
   "headers": {
     "Authorization": "Bearer YOUR_INVITE_KEY"
   }

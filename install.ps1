@@ -3,7 +3,7 @@
 #   or:  & { $env:ENGRAM_JOIN='ek_live_...'; irm https://engram-us.com/install.ps1 | iex }
 
 $ErrorActionPreference = 'Stop'
-$McpUrl = 'https://mcp.engram-us.com/mcp'
+$McpUrl = 'https://www.engram-us.com/mcp'
 $InviteKey = $env:ENGRAM_JOIN
 
 # ── Require Python 3 ───────────────────────────────────────────────
