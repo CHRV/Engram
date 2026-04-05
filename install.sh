@@ -41,192 +41,102 @@ if [ -z "$INVITE_KEY" ]; then
   fi
 fi
 
-# ── Per-IDE JSON patchers (Python) ─────────────────────────────────
-# Each IDE has its own config format, key names, and file location.
-# We use small Python scripts to patch each one correctly.
+# ── Per-IDE JSON patchers ──────────────────────────────────────────
+# Each IDE has its own config format. We use Python to patch each correctly.
 
-# Generic patcher for mcpServers.engram = {url, headers?}
-# Used by: Cursor, Kiro, JetBrains
+# mcpServers.engram = {url, headers?}
+# Used by: Cursor, Kiro, Trae, Amazon Q
 patch_mcpservers_url() {
-  CONFIG_FILE="$1"
-  python3 - "$CONFIG_FILE" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
 import json, sys, os
-
-config_file = sys.argv[1]
-mcp_url     = sys.argv[2]
-invite_key  = sys.argv[3]
-
-if os.path.exists(config_file):
-  try:
-    with open(config_file) as f:
-      config = json.load(f)
-  except Exception:
-    config = {}
-else:
-  os.makedirs(os.path.dirname(config_file), exist_ok=True)
-  config = {}
-
-if "mcpServers" not in config:
-  config["mcpServers"] = {}
-
-entry = {"url": mcp_url}
-if invite_key:
-  entry["headers"] = {"Authorization": f"Bearer {invite_key}"}
-
-config["mcpServers"]["engram"] = entry
-
-with open(config_file, "w") as f:
-  json.dump(config, f, indent=2)
-
-print(f"  ✓ {config_file}")
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+os.makedirs(os.path.dirname(f), exist_ok=True)
+c.setdefault("mcpServers", {})
+e = {"url": u}
+if k: e["headers"] = {"Authorization": f"Bearer {k}"}
+c["mcpServers"]["engram"] = e
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
 PYEOF
 }
 
-# Windsurf uses "serverUrl" instead of "url"
+# Windsurf: mcpServers.engram = {serverUrl, headers?}
 patch_windsurf() {
-  CONFIG_FILE="$1"
-  python3 - "$CONFIG_FILE" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
 import json, sys, os
-
-config_file = sys.argv[1]
-mcp_url     = sys.argv[2]
-invite_key  = sys.argv[3]
-
-if os.path.exists(config_file):
-  try:
-    with open(config_file) as f:
-      config = json.load(f)
-  except Exception:
-    config = {}
-else:
-  os.makedirs(os.path.dirname(config_file), exist_ok=True)
-  config = {}
-
-if "mcpServers" not in config:
-  config["mcpServers"] = {}
-
-entry = {"serverUrl": mcp_url}
-if invite_key:
-  entry["headers"] = {"Authorization": f"Bearer {invite_key}"}
-
-config["mcpServers"]["engram"] = entry
-
-with open(config_file, "w") as f:
-  json.dump(config, f, indent=2)
-
-print(f"  ✓ {config_file}")
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+os.makedirs(os.path.dirname(f), exist_ok=True)
+c.setdefault("mcpServers", {})
+e = {"serverUrl": u}
+if k: e["headers"] = {"Authorization": f"Bearer {k}"}
+c["mcpServers"]["engram"] = e
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
 PYEOF
 }
 
-# VS Code uses {servers: {name: {type, url, headers?}}} in mcp.json
+# VS Code: servers.engram = {type: "http", url, headers?}
 patch_vscode() {
-  CONFIG_FILE="$1"
-  python3 - "$CONFIG_FILE" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
 import json, sys, os
-
-config_file = sys.argv[1]
-mcp_url     = sys.argv[2]
-invite_key  = sys.argv[3]
-
-if os.path.exists(config_file):
-  try:
-    with open(config_file) as f:
-      config = json.load(f)
-  except Exception:
-    config = {}
-else:
-  os.makedirs(os.path.dirname(config_file), exist_ok=True)
-  config = {}
-
-if "servers" not in config:
-  config["servers"] = {}
-
-entry = {"type": "http", "url": mcp_url}
-if invite_key:
-  entry["headers"] = {"Authorization": f"Bearer {invite_key}"}
-
-config["servers"]["engram"] = entry
-
-with open(config_file, "w") as f:
-  json.dump(config, f, indent=2)
-
-print(f"  ✓ {config_file}")
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+os.makedirs(os.path.dirname(f), exist_ok=True)
+c.setdefault("servers", {})
+e = {"type": "http", "url": u}
+if k: e["headers"] = {"Authorization": f"Bearer {k}"}
+c["servers"]["engram"] = e
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
 PYEOF
 }
 
-# Claude Code: patches ~/.claude.json (NOT ~/.claude/settings.json)
-# Uses mcpServers.engram = {type: "http", url, headers?}
+# Claude Code: mcpServers.engram = {type: "http", url, headers?} in ~/.claude.json
 patch_claude_code() {
-  CONFIG_FILE="$1"
-  python3 - "$CONFIG_FILE" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
 import json, sys, os
-
-config_file = sys.argv[1]
-mcp_url     = sys.argv[2]
-invite_key  = sys.argv[3]
-
-if os.path.exists(config_file):
-  try:
-    with open(config_file) as f:
-      config = json.load(f)
-  except Exception:
-    config = {}
-else:
-  config = {}
-
-if "mcpServers" not in config:
-  config["mcpServers"] = {}
-
-entry = {"type": "http", "url": mcp_url}
-if invite_key:
-  entry["headers"] = {"Authorization": f"Bearer {invite_key}"}
-
-config["mcpServers"]["engram"] = entry
-
-with open(config_file, "w") as f:
-  json.dump(config, f, indent=2)
-
-print(f"  ✓ {config_file}")
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+c.setdefault("mcpServers", {})
+e = {"type": "http", "url": u}
+if k: e["headers"] = {"Authorization": f"Bearer {k}"}
+c["mcpServers"]["engram"] = e
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
 PYEOF
 }
 
-# Claude Desktop: remote servers must use npx mcp-remote as a stdio bridge
-# Direct {"url": ...} entries in claude_desktop_config.json are ignored.
+# Claude Desktop: must use npx mcp-remote bridge for remote servers
 patch_claude_desktop() {
-  CONFIG_FILE="$1"
-  python3 - "$CONFIG_FILE" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
 import json, sys, os
-
-config_file = sys.argv[1]
-mcp_url     = sys.argv[2]
-invite_key  = sys.argv[3]
-
-if os.path.exists(config_file):
-  try:
-    with open(config_file) as f:
-      config = json.load(f)
-  except Exception:
-    config = {}
-else:
-  os.makedirs(os.path.dirname(config_file), exist_ok=True)
-  config = {}
-
-if "mcpServers" not in config:
-  config["mcpServers"] = {}
-
-args = ["-y", "mcp-remote@latest", mcp_url]
-if invite_key:
-  args.extend(["--header", f"Authorization: Bearer {invite_key}"])
-
-config["mcpServers"]["engram"] = {
-  "command": "npx",
-  "args": args
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+os.makedirs(os.path.dirname(f), exist_ok=True)
+c.setdefault("mcpServers", {})
+a = ["-y", "mcp-remote@latest", u]
+if k: a.extend(["--header", f"Authorization: Bearer {k}"])
+c["mcpServers"]["engram"] = {"command": "npx", "args": a}
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
+PYEOF
 }
 
-with open(config_file, "w") as f:
-  json.dump(config, f, indent=2)
-
-print(f"  ✓ {config_file}")
+# Zed: context_servers.engram = {url, headers?} in settings.json
+patch_zed() {
+  python3 - "$1" "$MCP_URL" "$INVITE_KEY" << 'PYEOF'
+import json, sys, os
+f, u, k = sys.argv[1], sys.argv[2], sys.argv[3]
+c = json.load(open(f)) if os.path.exists(f) else {}
+os.makedirs(os.path.dirname(f), exist_ok=True)
+c.setdefault("context_servers", {})
+e = {"url": u}
+if k: e["headers"] = {"Authorization": f"Bearer {k}"}
+c["context_servers"]["engram"] = e
+json.dump(c, open(f, "w"), indent=2)
+print(f"  ✓ {f}")
 PYEOF
 }
 
@@ -235,71 +145,79 @@ echo ""
 echo "Detecting MCP clients..."
 PATCHED=0
 
-# Claude Desktop (Mac) — uses npx mcp-remote bridge
-CLAUDE_DESKTOP="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+# ── Claude Desktop ────────────────────────────────────────────────
+# Uses npx mcp-remote bridge (direct url entries are silently ignored)
 if [ "$OS" = "Darwin" ] && [ -d "$HOME/Library/Application Support/Claude" ]; then
-  patch_claude_desktop "$CLAUDE_DESKTOP"
+  patch_claude_desktop "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
   PATCHED=$((PATCHED + 1))
 fi
-
-# Claude Desktop (Linux) — uses npx mcp-remote bridge
-CLAUDE_DESKTOP_LINUX="$HOME/.config/Claude/claude_desktop_config.json"
 if [ "$OS" = "Linux" ] && [ -d "$HOME/.config/Claude" ]; then
-  patch_claude_desktop "$CLAUDE_DESKTOP_LINUX"
+  patch_claude_desktop "$HOME/.config/Claude/claude_desktop_config.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# Claude Code — config lives in ~/.claude.json (not ~/.claude/settings.json)
-CLAUDE_CODE="$HOME/.claude.json"
-if [ -f "$CLAUDE_CODE" ] || [ -d "$HOME/.claude" ]; then
-  patch_claude_code "$CLAUDE_CODE"
+# ── Claude Code ───────────────────────────────────────────────────
+# Config lives in ~/.claude.json, needs type: "http"
+if [ -f "$HOME/.claude.json" ] || [ -d "$HOME/.claude" ]; then
+  patch_claude_code "$HOME/.claude.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# Cursor (~/.cursor/mcp.json) — uses {url, headers?}
-CURSOR="$HOME/.cursor/mcp.json"
-if [ -f "$CURSOR" ] || [ -d "$HOME/.cursor" ]; then
-  patch_mcpservers_url "$CURSOR"
+# ── Cursor ────────────────────────────────────────────────────────
+if [ -f "$HOME/.cursor/mcp.json" ] || [ -d "$HOME/.cursor" ]; then
+  patch_mcpservers_url "$HOME/.cursor/mcp.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# VS Code (Mac) — uses {servers: {type: "http", url}} in mcp.json
-VSCODE_MAC="$HOME/Library/Application Support/Code/User/mcp.json"
+# ── VS Code ──────────────────────────────────────────────────────
+# Uses {servers: {type: "http", url}} in a dedicated mcp.json
 if [ "$OS" = "Darwin" ] && [ -d "$HOME/Library/Application Support/Code" ]; then
-  patch_vscode "$VSCODE_MAC"
+  patch_vscode "$HOME/Library/Application Support/Code/User/mcp.json"
   PATCHED=$((PATCHED + 1))
 fi
-
-# VS Code (Linux) — uses {servers: {type: "http", url}} in mcp.json
-VSCODE_LINUX="$HOME/.config/Code/User/mcp.json"
 if [ "$OS" = "Linux" ] && [ -d "$HOME/.config/Code" ]; then
-  patch_vscode "$VSCODE_LINUX"
+  patch_vscode "$HOME/.config/Code/User/mcp.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# Windsurf — uses {serverUrl} not {url}
-WINDSURF="$HOME/.codeium/windsurf/mcp_config.json"
-if [ -f "$WINDSURF" ] || [ -d "$HOME/.codeium/windsurf" ]; then
-  patch_windsurf "$WINDSURF"
+# ── Windsurf ─────────────────────────────────────────────────────
+# Uses "serverUrl" not "url"
+if [ -f "$HOME/.codeium/windsurf/mcp_config.json" ] || [ -d "$HOME/.codeium/windsurf" ]; then
+  patch_windsurf "$HOME/.codeium/windsurf/mcp_config.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# Kiro (~/.kiro/settings/mcp.json) — uses {url, headers?}
-KIRO="$HOME/.kiro/settings/mcp.json"
-if [ -f "$KIRO" ] || [ -d "$HOME/.kiro" ]; then
-  patch_mcpservers_url "$KIRO"
+# ── Kiro ─────────────────────────────────────────────────────────
+if [ -f "$HOME/.kiro/settings/mcp.json" ] || [ -d "$HOME/.kiro" ]; then
+  patch_mcpservers_url "$HOME/.kiro/settings/mcp.json"
   PATCHED=$((PATCHED + 1))
 fi
 
-# Zed (~/.config/zed/mcp.json or ~/Library/Application Support/Zed/mcp.json)
-if [ "$OS" = "Darwin" ]; then
-  ZED_DIR="$HOME/Library/Application Support/Zed"
-else
-  ZED_DIR="$HOME/.config/zed"
+# ── Zed ──────────────────────────────────────────────────────────
+# Uses "context_servers" in settings.json
+if [ "$OS" = "Darwin" ] && [ -d "$HOME/Library/Application Support/Zed" ]; then
+  patch_zed "$HOME/Library/Application Support/Zed/settings.json"
+  PATCHED=$((PATCHED + 1))
 fi
-ZED_MCP="$ZED_DIR/mcp.json"
-if [ -d "$ZED_DIR" ]; then
-  patch_mcpservers_url "$ZED_MCP"
+if [ "$OS" = "Linux" ] && [ -d "$HOME/.config/zed" ]; then
+  patch_zed "$HOME/.config/zed/settings.json"
+  PATCHED=$((PATCHED + 1))
+fi
+
+# ── Amazon Q Developer ───────────────────────────────────────────
+if [ -d "$HOME/.aws/amazonq" ]; then
+  patch_mcpservers_url "$HOME/.aws/amazonq/mcp.json"
+  PATCHED=$((PATCHED + 1))
+fi
+
+# ── Trae (ByteDance) ────────────────────────────────────────────
+# VS Code fork — uses mcpServers with {url}
+if [ "$OS" = "Darwin" ] && [ -d "$HOME/Library/Application Support/Trae" ]; then
+  patch_mcpservers_url "$HOME/Library/Application Support/Trae/User/mcp.json"
+  PATCHED=$((PATCHED + 1))
+fi
+if [ "$OS" = "Linux" ] && [ -d "$HOME/.config/Trae" ]; then
+  patch_mcpservers_url "$HOME/.config/Trae/User/mcp.json"
   PATCHED=$((PATCHED + 1))
 fi
 

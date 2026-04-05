@@ -33,22 +33,20 @@ echo.
 echo Detecting MCP clients...
 set "PATCHED=0"
 
-REM Claude Desktop (Windows) — uses npx mcp-remote bridge
+REM Claude Desktop — npx mcp-remote bridge
 if exist "%APPDATA%\Claude" (
     call :patch_claude_desktop "%APPDATA%\Claude\claude_desktop_config.json"
     set /a PATCHED+=1
 )
 
-REM Claude Code — config lives in ~/.claude.json
+REM Claude Code — ~/.claude.json
 if exist "%USERPROFILE%\.claude" (
     call :patch_claude_code "%USERPROFILE%\.claude.json"
     set /a PATCHED+=1
 )
-if exist "%USERPROFILE%\.claude.json" (
-    if not exist "%USERPROFILE%\.claude" (
-        call :patch_claude_code "%USERPROFILE%\.claude.json"
-        set /a PATCHED+=1
-    )
+if exist "%USERPROFILE%\.claude.json" if not exist "%USERPROFILE%\.claude" (
+    call :patch_claude_code "%USERPROFILE%\.claude.json"
+    set /a PATCHED+=1
 )
 
 REM Cursor
@@ -57,13 +55,13 @@ if exist "%USERPROFILE%\.cursor" (
     set /a PATCHED+=1
 )
 
-REM VS Code (Windows) — uses {servers: {type, url}} in mcp.json
+REM VS Code — {servers: {type, url}} in mcp.json
 if exist "%APPDATA%\Code" (
     call :patch_vscode "%APPDATA%\Code\User\mcp.json"
     set /a PATCHED+=1
 )
 
-REM Windsurf — uses {serverUrl}
+REM Windsurf — serverUrl
 if exist "%USERPROFILE%\.codeium\windsurf" (
     call :patch_windsurf "%USERPROFILE%\.codeium\windsurf\mcp_config.json"
     set /a PATCHED+=1
@@ -72,6 +70,18 @@ if exist "%USERPROFILE%\.codeium\windsurf" (
 REM Kiro
 if exist "%USERPROFILE%\.kiro" (
     call :patch_mcpservers_url "%USERPROFILE%\.kiro\settings\mcp.json"
+    set /a PATCHED+=1
+)
+
+REM Amazon Q Developer
+if exist "%USERPROFILE%\.aws\amazonq" (
+    call :patch_mcpservers_url "%USERPROFILE%\.aws\amazonq\mcp.json"
+    set /a PATCHED+=1
+)
+
+REM Trae (ByteDance)
+if exist "%APPDATA%\Trae" (
+    call :patch_mcpservers_url "%APPDATA%\Trae\User\mcp.json"
     set /a PATCHED+=1
 )
 
@@ -98,26 +108,26 @@ echo.
 goto :eof
 
 :patch_mcpservers_url
-set "CONFIG_FILE=%~1"
-%PY% -c "import json,sys,os;f=r'%CONFIG_FILE%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('mcpServers',{});e={'url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;os.makedirs(os.path.dirname(f),exist_ok=True);json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
+set "CF=%~1"
+%PY% -c "import json,os;f=r'%CF%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};os.makedirs(os.path.dirname(f),exist_ok=True);c.setdefault('mcpServers',{});e={'url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
 goto :eof
 
 :patch_windsurf
-set "CONFIG_FILE=%~1"
-%PY% -c "import json,sys,os;f=r'%CONFIG_FILE%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('mcpServers',{});e={'serverUrl':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;os.makedirs(os.path.dirname(f),exist_ok=True);json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
+set "CF=%~1"
+%PY% -c "import json,os;f=r'%CF%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};os.makedirs(os.path.dirname(f),exist_ok=True);c.setdefault('mcpServers',{});e={'serverUrl':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
 goto :eof
 
 :patch_vscode
-set "CONFIG_FILE=%~1"
-%PY% -c "import json,sys,os;f=r'%CONFIG_FILE%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('servers',{});e={'type':'http','url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['servers']['engram']=e;os.makedirs(os.path.dirname(f),exist_ok=True);json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
+set "CF=%~1"
+%PY% -c "import json,os;f=r'%CF%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};os.makedirs(os.path.dirname(f),exist_ok=True);c.setdefault('servers',{});e={'type':'http','url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['servers']['engram']=e;json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
 goto :eof
 
 :patch_claude_code
-set "CONFIG_FILE=%~1"
-%PY% -c "import json,sys,os;f=r'%CONFIG_FILE%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('mcpServers',{});e={'type':'http','url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
+set "CF=%~1"
+%PY% -c "import json,os;f=r'%CF%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('mcpServers',{});e={'type':'http','url':u};k and e.update({'headers':{'Authorization':'Bearer '+k}});c['mcpServers']['engram']=e;json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
 goto :eof
 
 :patch_claude_desktop
-set "CONFIG_FILE=%~1"
-%PY% -c "import json,sys,os;f=r'%CONFIG_FILE%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};c.setdefault('mcpServers',{});a=['-y','mcp-remote@latest',u];k and a.extend(['--header','Authorization: Bearer '+k]);c['mcpServers']['engram']={'command':'npx','args':a};os.makedirs(os.path.dirname(f),exist_ok=True);json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
+set "CF=%~1"
+%PY% -c "import json,os;f=r'%CF%';u='%MCP_URL%';k='%INVITE_KEY%';c=json.load(open(f)) if os.path.exists(f) else {};os.makedirs(os.path.dirname(f),exist_ok=True);c.setdefault('mcpServers',{});a=['-y','mcp-remote@latest',u];k and a.extend(['--header','Authorization: Bearer '+k]);c['mcpServers']['engram']={'command':'npx','args':a};json.dump(c,open(f,'w'),indent=2);print('  + '+f)"
 goto :eof
