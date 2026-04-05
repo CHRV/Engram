@@ -15,7 +15,7 @@ def _render_landing() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Engram — Shared memory for your team's agents</title>
-  <meta name="description" content="Shared memory for your team's agents. Works with any MCP-compatible IDE. Zero setup. Your data is private.">
+  <meta name="description" content="Shared memory for your team's agents. Works with any MCP-compatible IDE. Zero setup. All data encrypted, never shared, always yours.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -100,6 +100,16 @@ def _render_landing() -> str:
     .card p { font-size: 16px; color: #1e293b; line-height: 1.7; margin-bottom: 16px; }
     .card p:last-child { margin-bottom: 0; }
     .card strong { color: #059669; font-weight: 600; }
+
+    /* Privacy grid */
+    .privacy-grid { display: grid; gap: 20px; margin-top: 20px; }
+    .privacy-item {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 16px; background: #f0fdf4; border-radius: 10px;
+    }
+    .privacy-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+    .privacy-item strong { color: #064e3b; font-size: 15px; }
+    .privacy-item p { font-size: 14px; color: #1e293b; line-height: 1.5; margin: 4px 0 0; }
 
     /* Tools grid */
     .tools-grid { display: grid; gap: 12px; margin-top: 24px; }
@@ -222,7 +232,7 @@ def _render_landing() -> str:
     <h1>Shared memory for your team's agents</h1>
     <p class="subtitle">
       Works with any MCP-compatible IDE. Zero setup — one command and you're in.
-      Your data is private and never used.
+      Your data is encrypted, never shared, and always yours.
     </p>
   </div>
 </section>
@@ -319,9 +329,38 @@ def _render_landing() -> str:
       and surfaces it for review.
     </p>
     <p>
-      <strong>Your data is private.</strong> Facts live in our database, isolated by workspace.
-      We don't read, analyze, or redistribute your team's memory. Ever.
+      <strong>Your data is private.</strong> All data is encrypted in transit and at rest,
+      isolated by workspace, and never read, analyzed, or redistributed.
+      We don't train on your data. We don't sell it. We have no analytics pipeline
+      that touches your content. Privacy isn't a feature — it's the foundation.
     </p>
+  </div>
+
+  <!-- Privacy -->
+  <div class="card">
+    <h2 class="section-title">Privacy Is the Foundation</h2>
+    <div class="privacy-grid">
+      <div class="privacy-item">
+        <div class="privacy-icon">🔒</div>
+        <div><strong>Encrypted</strong><p>All data encrypted in transit (TLS) and at rest. Invite keys use encrypted payloads — teammates never see raw credentials.</p></div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">🔐</div>
+        <div><strong>Isolated</strong><p>Every workspace is fully isolated. No cross-workspace access, no shared tables, no data leakage between teams.</p></div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">🚫</div>
+        <div><strong>Never read</strong><p>We don't read your facts. We don't analyze your memory. We don't train on your data. We don't sell it. No analytics pipeline touches your content.</p></div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">🛡️</div>
+        <div><strong>Never redistributed</strong><p>Your team's knowledge never leaves your workspace. Never shared with other users, teams, or third parties. Not now, not ever.</p></div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">⚙️</div>
+        <div><strong>You control it</strong><p>Delete your workspace and everything is gone. Anonymous mode strips names. Anonymous agents randomize IDs. You decide what's visible.</p></div>
+      </div>
+    </div>
   </div>
 
   <!-- Tools -->

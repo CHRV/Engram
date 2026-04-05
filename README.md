@@ -20,7 +20,7 @@ When one agent discovers something important — a hidden side effect, a failed 
 
 When two agents develop incompatible beliefs, Engram detects the contradiction and surfaces it for review.
 
-**Your data is private.** Facts live in our database, isolated by workspace. We don't read, analyze, or redistribute your team's memory. Ever.
+**Your data is private.** All data is encrypted, isolated by workspace, and never read, analyzed, or redistributed. We have a deep commitment to privacy — it's not a feature, it's the foundation.
 
 ---
 
@@ -123,11 +123,17 @@ No database to provision, no servers to run, no ports to open. Install and go.
 
 ## Privacy & Security
 
-- Facts are isolated per workspace — no cross-workspace access
-- Invite keys use encrypted payloads — teammates never see raw credentials
-- **Anonymous mode** — Strip engineer names from all commits
-- **Anonymous agents** — Randomize agent IDs each session
-- We don't read, analyze, or redistribute your data
+Your memory is yours. This isn't a footnote — it's the foundation Engram is built on.
+
+**Encrypted.** All data is encrypted in transit (TLS) and at rest. Invite keys use encrypted payloads so teammates never see raw credentials.
+
+**Isolated.** Every workspace is fully isolated. There is no cross-workspace access, no shared tables, no data leakage between teams.
+
+**Never read.** We don't read your facts. We don't analyze your memory. We don't train on your data. We don't sell it. We have no analytics pipeline that touches your content. Period.
+
+**Never redistributed.** Your team's knowledge never leaves your workspace. It is never shared with other users, other teams, or third parties. Not now, not ever.
+
+**You control it.** Delete your workspace and everything is gone. Anonymous mode strips engineer names from all commits. Anonymous agents randomize agent IDs each session. You decide what's visible and what isn't.
 
 ---
 
