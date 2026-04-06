@@ -469,17 +469,6 @@ class EngramEngine:
             ):
                 score *= 0.3
 
-            # Combined score with enhanced signals
-            score = (
-                relevance
-                + 0.2 * recency
-                + 0.15 * trust
-                + 0.1 * fact_type_weight
-                + 0.1 * provenance_weight
-                + 0.1 * corroboration_weight
-                + 0.05 * entity_density
-            )
-
             # Ephemeral facts rank lower than durable facts
             if fact.get("durability") == "ephemeral":
                 score *= 0.6
@@ -684,6 +673,11 @@ class EngramEngine:
         except asyncio.CancelledError:
             for t in list(active):
                 t.cancel()
+            for t in list(active):
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     async def _detect_with_semaphore(
         self, fact_id: str, semaphore: asyncio.Semaphore
