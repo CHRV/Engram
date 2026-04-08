@@ -912,10 +912,17 @@ class PostgresStorage(BaseStorage):
     async def consume_invite_key(self, key_hash: str) -> None:
         async with self.acquire() as conn:
             await conn.execute(
+    async def consume_invite_key(self, key_hash: str) -> dict | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
                 "UPDATE invite_keys SET uses_remaining = uses_remaining - 1 "
-                "WHERE key_hash = $1 AND uses_remaining IS NOT NULL",
+                "WHERE key_hash = $1 "
+                "AND (expires_at IS NULL OR expires_at > NOW()) "
+                "AND (uses_remaining IS NULL OR uses_remaining > 0) "
+                "RETURNING *",
                 key_hash,
             )
+        return _row_to_dict(row) if row else None
 
     async def get_key_generation(self, engram_id: str) -> int:
         async with self.acquire() as conn:

@@ -258,8 +258,9 @@ class BaseStorage(ABC):
         """Return invite key row if valid (not expired, uses remaining). Default None."""
         return None
 
-    async def consume_invite_key(self, key_hash: str) -> None:
-        """Decrement uses_remaining. Default no-op for local mode."""
+    async def consume_invite_key(self, key_hash: str) -> dict | None:
+        """Atomically validate and decrement uses_remaining. Returns the key row if consumed, None if exhausted/expired."""
+        return None
 
     async def get_key_generation(self, engram_id: str) -> int:
         """Return the current key_generation for a workspace. Default 0."""
@@ -276,8 +277,9 @@ class BaseStorage(ABC):
 class SQLiteStorage(BaseStorage):
     """Async SQLite storage with WAL mode and FTS5."""
 
-    def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
+    def __init__(self, db_path: Path | str = DEFAULT_DB_PATH, workspace_id: str = "local") -> None:
         self.db_path = Path(db_path)
+        self.workspace_id = workspace_id
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
@@ -364,8 +366,14 @@ class SQLiteStorage(BaseStorage):
             "memory_op",
             "supersedes_fact_id",
             "durability",
+            "id", "lineage_id", "content", "content_hash", "scope",
+            "confidence", "fact_type", "agent_id", "engineer", "provenance",
+            "keywords", "entities", "artifact_hash", "embedding",
+            "embedding_model", "embedding_ver", "committed_at",
+            "valid_from", "valid_until", "ttl_days",
+            "memory_op", "supersedes_fact_id", "workspace_id", "durability",
         ]
-        defaults = {"memory_op": "add", "durability": "durable"}
+        defaults = {"memory_op": "add", "durability": "durable", "workspace_id": self.workspace_id}
         placeholders = ", ".join(["?"] * len(cols))
         col_names = ", ".join(cols)
         values = [fact.get(c, defaults.get(c)) for c in cols]
@@ -553,13 +561,14 @@ class SQLiteStorage(BaseStorage):
         cursor = await self.db.execute(
             """SELECT f.* FROM facts f, json_each(f.entities) e
                WHERE f.valid_until IS NULL
+                 AND f.workspace_id = ?
                  AND f.id != ?
                  AND f.scope = ?
                  AND json_extract(e.value, '$.name') = ?
                  AND json_extract(e.value, '$.type') = ?
                  AND json_extract(e.value, '$.value') IS NOT NULL
                  AND CAST(json_extract(e.value, '$.value') AS TEXT) != ?""",
-            (exclude_id, scope, entity_name, entity_type, str(entity_value)),
+            (self.workspace_id, exclude_id, scope, entity_name, entity_type, str(entity_value)),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -571,12 +580,13 @@ class SQLiteStorage(BaseStorage):
         cursor = await self.db.execute(
             """SELECT f.* FROM facts f, json_each(f.entities) e
                WHERE f.valid_until IS NULL
+                 AND f.workspace_id = ?
                  AND f.id != ?
                  AND json_extract(e.value, '$.name') = ?
                  AND json_extract(e.value, '$.type') = ?
                  AND (json_extract(e.value, '$.value') IS NULL
                       OR CAST(json_extract(e.value, '$.value') AS TEXT) != ?)""",
-            (exclude_id, entity_name, entity_type, str(entity_value)),
+            (self.workspace_id, exclude_id, entity_name, entity_type, str(entity_value)),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -1086,14 +1096,19 @@ class SQLiteStorage(BaseStorage):
         row = await cursor.fetchone()
         return dict(row) if row else None
 
-    async def consume_invite_key(self, key_hash: str) -> None:
-        await self.db.execute(
+    async def consume_invite_key(self, key_hash: str) -> dict | None:
+        cursor = await self.db.execute(
             """UPDATE invite_keys
                SET uses_remaining = uses_remaining - 1
-               WHERE key_hash = ? AND uses_remaining IS NOT NULL""",
-            (key_hash,),
+               WHERE key_hash = ?
+                 AND (expires_at IS NULL OR expires_at > ?)
+                 AND (uses_remaining IS NULL OR uses_remaining > 0)
+               RETURNING *""",
+            (key_hash, _now_iso()),
         )
+        row = await cursor.fetchone()
         await self.db.commit()
+        return dict(row) if row else None
 
     async def get_key_generation(self, engram_id: str) -> int:
         cursor = await self.db.execute(

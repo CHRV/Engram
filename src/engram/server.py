@@ -318,11 +318,12 @@ async def engram_join(invite_key: str) -> dict[str, Any]:
     schema = payload.get("schema", "engram")  # backward compatibility
     key_generation = payload.get("key_generation", 0)
 
-    # Server-side validation: check uses_remaining and expiry in the database
+    # Atomically validate and consume the invite key in a single query
+    # to prevent TOCTOU race conditions with concurrent joins.
     key_hash = invite_key_hash(invite_key)
     if _storage is not None:
-        key_row = await _storage.validate_invite_key(key_hash)
-        if key_row is None:
+        consumed = await _storage.consume_invite_key(key_hash)
+        if consumed is None:
             return {
                 "status": "error",
                 "next_prompt": (
@@ -330,7 +331,6 @@ async def engram_join(invite_key: str) -> dict[str, Any]:
                     "Ask the workspace creator to generate a new one with engram_reset_invite_key."
                 ),
             }
-        await _storage.consume_invite_key(key_hash)
 
     # Write workspace.json — db_url extracted silently, never shown to user
     config = WorkspaceConfig(
@@ -489,8 +489,8 @@ async def engram_reset_invite_key(
 )
 async def engram_commit(
     content: str,
-    scope: str,
-    confidence: float,
+    scope: str = "general",
+    confidence: float = 0.8,
     agent_id: str | None = None,
     engineer: str | None = None,
     corrects_lineage: str | None = None,
@@ -523,10 +523,12 @@ async def engram_commit(
       relevant. BAD: "auth is broken". GOOD: "The auth service
       rate-limits to 1000 req/s per IP using a sliding window in Redis,
       configured via AUTH_RATE_LIMIT in .env".
-    - scope: Hierarchical topic path. Examples: "auth", "payments/webhooks",
-      "infra/docker". Use consistent scopes across your team.
-    - confidence: 0.0-1.0. How certain is this claim? 1.0 = verified in
-      code. 0.7 = observed behavior. 0.3 = inferred from context.
+    - scope: Hierarchical topic path. Defaults to "general". Examples:
+      "auth", "payments/webhooks", "infra/docker". Use consistent scopes
+      across your team.
+    - confidence: 0.0-1.0. Defaults to 0.8. How certain is this claim?
+      1.0 = verified in code. 0.7 = observed behavior. 0.3 = inferred
+      from context.
     - agent_id: Your agent identifier. Use your agent name for attribution
       (e.g. the name field from your AgentConfig when using open-multi-agent).
       Auto-generated if omitted.

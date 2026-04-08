@@ -601,8 +601,8 @@ async def _serve(
         from engram.storage import SQLiteStorage
 
         effective_db = db_path or str(DEFAULT_DB_PATH)
-        storage = SQLiteStorage(db_path=effective_db)
-        logger.info("Local mode: SQLite (%s)", effective_db)
+        storage = SQLiteStorage(db_path=effective_db, workspace_id=workspace_id)
+        logger.info("Local mode: SQLite (%s, workspace: %s)", effective_db, workspace_id)
 
     await storage.connect()
 
@@ -699,7 +699,44 @@ def token_create(engineer: str, agent_id: str | None, expires_hours: int) -> Non
     tok = create_token(engineer=engineer, agent_id=agent_id, expires_hours=expires_hours)
     click.echo(tok)
 
+# ── engram config ────────────────────────────────────────────────────
 
+
+@main.group()
+def config() -> None:
+    """Show and update workspace settings."""
+    pass
+
+
+@config.command("show")
+def config_show() -> None:
+    """Pretty-print the current editable workspace settings."""
+    from engram.workspace import read_workspace_settings
+
+    try:
+        settings = read_workspace_settings()
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    click.echo(json.dumps(settings, indent=2))
+
+
+@config.command("set")
+@click.argument("key")
+@click.argument("value")
+def config_set(key: str, value: str) -> None:
+    """Update a single editable workspace setting."""
+    from engram.workspace import parse_config_value, set_workspace_setting
+
+    try:
+        parsed_value = parse_config_value(key, value)
+        set_workspace_setting(key, value)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    click.echo(f"Updated {key}={json.dumps(parsed_value)}")
+    
+    
 # ── engram verify ────────────────────────────────────────────────────
 
 
@@ -1008,6 +1045,65 @@ def reembed(model: str | None, batch_size: int, dry_run: bool) -> None:
             await storage.close()
 
     asyncio.run(run_reembed())
+# ── engram completion ─────────────────────────────────────────────────
+
+_SHELL_CONFIGS = {
+    "bash": ("~/.bashrc", 'eval "$(_ENGRAM_COMPLETE=bash_source engram)"'),
+    "zsh": ("~/.zshrc", 'eval "$(_ENGRAM_COMPLETE=zsh_source engram)"'),
+    "fish": (
+        "~/.config/fish/completions/engram.fish",
+        "_ENGRAM_COMPLETE=fish_source engram | source",
+    ),
+}
+
+
+@main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), required=False)
+def completion(shell: str | None) -> None:
+    """Install shell tab-completion for engram.
+
+    Detects your current shell automatically, or pass bash/zsh/fish
+    explicitly. Appends the completion hook to your shell profile.
+
+    \b
+    Examples:
+        engram completion          # auto-detect shell
+        engram completion zsh      # explicit shell
+    """
+    import os
+
+    if shell is None:
+        current = os.environ.get("SHELL", "")
+        if "zsh" in current:
+            shell = "zsh"
+        elif "fish" in current:
+            shell = "fish"
+        elif "bash" in current:
+            shell = "bash"
+        else:
+            click.echo(f"Could not detect shell from $SHELL={current!r}.")
+            click.echo("Please specify explicitly: engram completion bash|zsh|fish")
+            raise SystemExit(1)
+
+    config_path, snippet = _SHELL_CONFIGS[shell]
+
+    if shell == "fish":
+        # Fish completions go in a dedicated file, not appended to a profile
+        target = Path(config_path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(snippet + "\n")
+        click.echo(f"Wrote fish completions to {target}")
+    else:
+        target = Path(config_path).expanduser()
+        # Check if already installed
+        if target.exists() and snippet in target.read_text():
+            click.echo(f"Engram completions already installed in {config_path}")
+            return
+        with target.open("a") as f:
+            f.write(f"\n# Engram shell completion\n{snippet}\n")
+        click.echo(f"Appended completion hook to {config_path}")
+
+    click.echo(f"Restart your shell or run: source {config_path}")
 
 
 if __name__ == "__main__":
